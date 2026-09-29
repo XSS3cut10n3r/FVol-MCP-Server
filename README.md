@@ -24,6 +24,22 @@ Environment variables:
 
 Resources: `fvol://plugins`, `fvol://help/{plugin}`.
 
+## Prompt
+
+LLMs will invent PIDs, addresses and "findings" if you let them. Start with a prompt like this:
+
+```md
+Your task is to perform memory forensics on <PATH TO IMAGE> using the fvol MCP tools. Strategy:
+
+- Start with `get_image_info` to identify the OS, then triage: `run_pstree`, `run_cmdline`, `run_netscan`, `run_malfind`
+- Compare `run_pslist` against `run_psscan` to find hidden or terminated processes
+- Drill into suspicious processes with `run_dlllist`, `run_handles` and `run_memmap` using their PID
+- For any other plugin use `run_custom_plugin`; check `fvol://help/{plugin}` for its options first
+- Only report what the tool output shows. Quote the PID, offset or row for every claim. NEVER guess values
+- If a plugin errors or returns nothing, say so; don't fill the gap with assumptions
+- Write a report.md at the end: timeline, suspicious processes, network indicators, IOCs, and the commands behind each finding
+```
+
 ## License
 
 MIT. fvol is separate and licensed under VSL 1.0.

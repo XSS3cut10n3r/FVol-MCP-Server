@@ -7,9 +7,9 @@ MCP server that exposes [fvol](https://github.com/code-zm/fvol) (Rust port of Vo
 Requires Linux, Python 3.10+, and the `fvol` binary ([releases](https://github.com/code-zm/fvol/releases/latest)).
 
 ```bash
-git clone https://github.com/XSS3cut10n3r/FVol-MVP-Server.git
-pip install -r FVol-MVP-Server/requirements.txt
-claude mcp add fvol -e FVOL_PATH=/path/to/fvol -- python3 /path/to/FVol-MVP-Server/fvol_mcp_server.py
+git clone https://github.com/XSS3cut10n3r/FVol-MCP-Server.git
+pip install -r FVol-MCP-Server/requirements.txt
+claude mcp add fvol -e FVOL_PATH=/path/to/fvol -- python3 /path/to/FVol-MCP-Server/fvol_mcp_server.py
 ```
 
 Environment variables:

@@ -140,7 +140,7 @@ async def run_dlllist(memory_dump_path: str, pid: Optional[int] = None) -> str:
 
 @mcp.tool()
 async def run_handles(memory_dump_path: str, pid: Optional[int] = None) -> str:
-ts
+    """Run the Handles plugin to list open handles for processes"""
     memory_dump_path = os.path.normpath(memory_dump_path)
     if not os.path.isfile(memory_dump_path):
         return f"Error: Memory dump file not found at {memory_dump_path}"

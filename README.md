@@ -1,156 +1,154 @@
-# Volatility MCP Server
+# FVol MCP Server
 
-A Model Context Protocol (MCP) server that integrates Volatility 3 memory forensics framework with Claude and other MCP-compatible LLMs.
+A Model Context Protocol (MCP) server that lets Claude and other MCP-compatible LLMs run memory
+forensics with [fvol](https://github.com/code-zm/fvol), a Rust port of Volatility 3.
 
-## Why This Matters
+This is a fork of [Volatility-MCP-Server](https://github.com/bornpresident/Volatility-MCP-Server)
+by Vishal Chand. It exposes the same tools, but runs `fvol` instead of python volatility3.
 
-In India, digital forensic investigators face a massive backlog of cases due to the country's large population and rising cybercrime rates. This tool helps address this challenge by:
+## Why fvol
 
-- Allowing investigators to analyze memory dumps using simple natural language instead of complex commands
-- Reducing the technical expertise needed to perform memory forensics
-- Accelerating the analysis process through automation
-- Helping clear case backlogs and deliver faster results to the judicial system
+fvol reproduces all 197 plugins of volatility3 2.28.2, with the same names, options and output,
+and is much faster: a common triage session on a Windows 11 image takes about 126 ms instead of
+about 60 s with python ([benchmarks](https://github.com/code-zm/fvol#performance)). It is a single
+static binary with no dependencies, so there is no Python environment or volatility3 checkout to
+set up.
 
-By making memory forensics more accessible, this tool can significantly reduce the burden on forensic experts and improve cybersecurity response across India.
+For an LLM that runs many plugins in a row, that speed is the difference between waiting minutes
+for an answer and getting one almost immediately.
 
-## Overview
+## Changes from the original
 
-This project bridges the powerful memory forensics capabilities of the Volatility 3 Framework with Large Language Models (LLMs) through the Model Context Protocol (MCP). It allows you to perform memory forensics analysis using natural language by exposing Volatility plugins as MCP tools that can be invoked directly by Claude or other MCP-compatible LLMs.
-
-## Features
-
-- **Natural Language Memory Forensics**: Ask Claude to analyze memory dumps using natural language
-- **Process Analysis**: Examine running processes, parent-child relationships, and hidden processes
-- **Network Forensics**: Identify network connections in memory dumps
-- **Malware Detection**: Find potential code injection and other malicious artifacts
-- **DLL Analysis**: Examine loaded DLLs and modules
-- **File Objects**: Scan for file objects in memory
-- **Custom Plugins**: Run any Volatility plugin with custom arguments
-- **Memory Dump Discovery**: Automatically find memory dumps in a directory
+- Runs the `fvol` binary instead of `python vol.py`; the path comes from `FVOL_PATH` or `PATH`
+  rather than a hard-coded Windows directory.
+- Fixes the stray `ts` token in `run_handles` that caused an `IndentationError` and kept the
+  original server from starting.
+- Restores tool docstrings, which MCP clients show the LLM as tool descriptions.
+- `run_malfind` uses `windows.malware.malfind.Malfind` and dumps with `-o <dir> --dump`
+  (volatility3 has no `--dump-dir` option). `run_memmap` can also dump.
+- Logs to stderr, since stdout carries the MCP protocol, and runs fvol with stdin closed.
+- `run_custom_plugin` splits arguments with shell quoting rules and takes a `renderer`
+  (`quick`, `pretty`, `csv`, `json`, `jsonl`, `mermaid`).
+- Works with both the 1.x (`FastMCP`) and 2.x (`MCPServer`) MCP Python SDK.
+- Per-run timeout (`FVOL_TIMEOUT`) and optional symbol directories (`FVOL_SYMBOL_DIRS`).
+- The volatility3 source tree is no longer bundled.
 
 ## Requirements
 
-- Python 3.10 or higher
-- Volatility 3 Framework
-- Claude Desktop or other MCP-compatible client
-- MCP Python SDK (`mcp` package)
+- Linux (x86-64 or arm64), the platforms fvol supports
+- [fvol](https://github.com/code-zm/fvol): a [release binary](https://github.com/code-zm/fvol/releases/latest),
+  or built with `cargo build --release` (Rust 1.95+)
+- Python 3.10 or later and the MCP Python SDK
+- `curl`, which fvol uses to download Windows symbols
+- Claude Desktop, Claude Code or another MCP client
 
 ## Installation
 
-1. Clone this repository:
+1. Install fvol and check that it runs:
+
    ```bash
-   git clone https://github.com/yourusername/volatility-mcp-server.git
+   fvol --version
    ```
 
-2. Install the required Python packages:
+2. Clone this repository and install the Python dependency:
+
    ```bash
-   pip install mcp httpx
+   git clone https://github.com/XSS3cut10n3r/FVol-MVP-Server.git
+   cd FVol-MVP-Server
+   pip install -r requirements.txt
    ```
 
-3. Configure the Volatility path in the script:
-   - Open `volatility_mcp_server.py` and update the `VOLATILITY_DIR` variable to point to your Volatility 3 installation path.
+3. Add the server to your MCP client.
 
-4. Configure Claude Desktop:
-   - Open your Claude Desktop configuration file located at:
-     - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-     - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-   - Add the server configuration:
+   **Claude Code:**
+
+   ```bash
+   claude mcp add fvol -e FVOL_PATH=/path/to/fvol -- python3 /path/to/FVol-MVP-Server/fvol_mcp_server.py
+   ```
+
+   **Claude Desktop** (`claude_desktop_config.json`):
+
    ```json
    {
      "mcpServers": {
-       "volatility": {
-         "command": "python",
-         "args": [
-           "/path/to/volatility_mcp_server.py"
-         ],
+       "fvol": {
+         "command": "python3",
+         "args": ["/path/to/FVol-MVP-Server/fvol_mcp_server.py"],
          "env": {
-           "PYTHONPATH": "/path/to/volatility3"
+           "FVOL_PATH": "/path/to/fvol"
          }
        }
      }
    }
    ```
-   - Replace `/path/to/` with the actual path to your files.
 
-5. Restart Claude Desktop to apply the changes.
+   `FVOL_PATH` can be left out if `fvol` is on your `PATH`.
+
+4. Restart the client.
+
+## Configuration
+
+| Variable           | Default          | Meaning                                                          |
+| ------------------ | ---------------- | ---------------------------------------------------------------- |
+| `FVOL_PATH`        | `fvol` on `PATH` | Path to the fvol binary                                          |
+| `FVOL_SYMBOL_DIRS` | none             | Semicolon-separated symbol directories, passed to fvol as `-s`   |
+| `FVOL_TIMEOUT`     | `600`            | Seconds before a single fvol run is stopped; `0` means no limit  |
+
+Windows symbols are downloaded automatically. Linux and macOS images need a symbol file that
+matches the kernel; see [fvol's usage guide](https://github.com/code-zm/fvol/blob/main/docs/usage.md#analyze-a-linux-image).
 
 ## Usage
 
-After setup, you can simply ask Claude natural language questions about your memory dumps:
+Ask about your memory dumps in plain language:
 
-- "List all processes in the memory dump at C:\path\to\dump.vmem"
-- "Show me the network connections in C:\path\to\dump.vmem"
-- "Run malfind to check for code injection in the memory dump"
-- "What DLLs are loaded in process ID 4328?"
-- "Check for hidden processes in C:\path\to\dump.vmem"
+- "List all processes in the memory dump at /cases/host1/memory.raw"
+- "Show me the network connections in /cases/host1/memory.raw"
+- "Run malfind to check for code injection and dump what it finds to /cases/host1/malfind"
+- "What DLLs are loaded in process 4328?"
+- "Check for hidden processes"
+- "Run linux.bash.Bash on /cases/web01.lime"
 
-## Available Tools
+## Available tools
 
-The server exposes the following Volatility plugins as MCP tools:
+| Tool                     | fvol plugin                        |
+| ------------------------ | ---------------------------------- |
+| `list_available_plugins` | `fvol -h`                          |
+| `get_image_info`         | `windows.info.Info`                |
+| `run_pstree`             | `windows.pstree.PsTree`            |
+| `run_pslist`             | `windows.pslist.PsList`            |
+| `run_psscan`             | `windows.psscan.PsScan`            |
+| `run_netscan`            | `windows.netscan.NetScan`          |
+| `run_malfind`            | `windows.malware.malfind.Malfind`  |
+| `run_cmdline`            | `windows.cmdline.CmdLine`          |
+| `run_dlllist`            | `windows.dlllist.DllList`          |
+| `run_handles`            | `windows.handles.Handles`          |
+| `run_filescan`           | `windows.filescan.FileScan`        |
+| `run_memmap`             | `windows.memmap.Memmap`            |
+| `run_custom_plugin`      | any plugin, with custom arguments  |
+| `list_memory_dumps`      | finds memory images in a directory |
 
-1. `list_available_plugins` - Shows all Volatility plugins you can use
-2. `get_image_info` - Provides information about a memory dump file
-3. `run_pstree` - Shows the process hierarchy
-4. `run_pslist` - Lists processes from the process list
-5. `run_psscan` - Scans for processes including ones that might be hidden
-6. `run_netscan` - Shows network connections in the memory dump
-7. `run_malfind` - Detects potential code injection
-8. `run_cmdline` - Shows command line arguments for processes
-9. `run_dlllist` - Lists loaded DLLs for processes
-10. `run_handles` - Shows file handles and other system handles
-11. `run_filescan` - Scans for file objects in memory
-12. `run_memmap` - Shows the memory map for a specific process
-13. `run_custom_plugin` - Run any Volatility plugin with custom arguments
-14. `list_memory_dumps` - Find memory dumps in a directory
+Resources:
 
-## Memory Forensics Workflow
+- `fvol://plugins`: JSON list of every plugin name
+- `fvol://help/{plugin}`: the `--help` text of one plugin
 
-This MCP server enables a streamlined memory forensics workflow:
+## Memory forensics workflow
 
-1. **Initial Triage**:
-   - "Show me the process tree in memory.vmem"
-   - "List all network connections in memory.vmem"
-
-2. **Suspicious Process Investigation**:
-   - "What command line was used to start process 1234?"
-   - "Show me all the DLLs loaded by process 1234"
-   - "What file handles are open in process 1234?"
-
-3. **Malware Hunting**:
-   - "Run malfind on memory.vmem to check for code injection"
-   - "Show me processes with unusual parent-child relationships"
-   - "Find hidden processes in memory.vmem"
+1. **Triage**: "Show me the process tree", "List the network connections"
+2. **Suspicious process**: "What command line started process 1234?", "Which DLLs and handles
+   does process 1234 have?"
+3. **Malware hunting**: "Run malfind", "Compare pslist with psscan to find hidden processes"
 
 ## Troubleshooting
 
-If you encounter issues:
-
-1. **Path Problems**:
-   - Make sure all paths are absolute and use double backslashes in Windows paths
-   - Check that the memory dump file exists and is readable
-
-2. **Permission Issues**:
-   - Run Claude Desktop as Administrator
-   - Check that Python and the Volatility directory have proper permissions
-
-3. **Volatility Errors**:
-   - Make sure Volatility 3 works correctly on its own
-   - Try running the same command directly in your command line
-
-4. **MCP Errors**:
-   - Check Claude Desktop logs for MCP errors
-   - Make sure the MCP Python package is installed correctly
-
-## Extending
-
-This server can be extended by:
-
-1. Adding more Volatility plugins
-2. Creating custom analysis workflows
-3. Integrating with other forensic tools
-4. Adding report generation capabilities
+- **fvol binary not found**: set `FVOL_PATH` to the absolute path of `fvol`.
+- **"Unable to validate the plugin requirements"**: fvol could not find the kernel or its
+  symbols. For Windows, check network access to `msdl.microsoft.com`; for Linux and macOS, set
+  `FVOL_SYMBOL_DIRS`. Running `fvol -v -f <image> <plugin>` shows the reason.
+- **MCP errors**: check your client's MCP logs, and that `python3 fvol_mcp_server.py` starts
+  without an import error.
 
 ## License
 
-[MIT License](LICENSE)
-
+[MIT License](LICENSE). fvol itself is a separate program under the Volatility Software License
+1.0 and is not included in this repository.

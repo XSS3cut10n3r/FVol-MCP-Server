@@ -17,10 +17,36 @@ Environment variables:
 - `FVOL_PATH`: fvol binary (default: `fvol` on `PATH`)
 - `FVOL_SYMBOL_DIRS`: symbol dirs for Linux/macOS images, `;`-separated
 - `FVOL_TIMEOUT`: seconds per run (default 600, `0` = none)
+- `FVOL_WEB`: run plugins in the `fvol serve` web UI so you can watch them (see below)
+
+## Web UI mode
+
+With `FVOL_WEB` set, every tool runs its plugin inside `fvol serve` instead of a separate `fvol`
+process. The image opens in the browser, and each tool call shows up under **Runs** as
+`Claude: <plugin> <args>`, with its progress and results table. The tools still return the exact
+text `fvol` prints.
+
+- `FVOL_WEB=1`: start `fvol serve` on the first tool call and open it in the browser. It stops
+  with the MCP server.
+- `FVOL_WEB=http://127.0.0.1:8765/#token=...`: use a server you started yourself (`./fvol serve`);
+  paste the `open` URL it prints.
+- Or leave it unset and ask Claude to call `open_web_ui` (optionally with that URL);
+  `close_web_ui` goes back to the command line.
+
+```bash
+claude mcp add fvol -e FVOL_PATH=/path/to/fvol -e FVOL_WEB=1 -- python3 /path/to/FVol-MCP-Server/fvol_mcp_server.py
+```
+
+More settings for the server this MCP server starts: `FVOL_WEB_ARGS` (extra `fvol serve`
+arguments, such as `--port 8765 --parallel 4`), `FVOL_WEB_OUTPUT_DIR` (its `-o`, default
+`~/.cache/fvol-mcp/serve-output`), `FVOL_WEB_BROWSER=0` (don't open a browser), `FVOL_WEB_TOKEN`
+(token for a URL without one). Files that `dump_dir` asks for are downloaded from the server into
+`dump_dir` as before. Runs and results are also saved by `fvol serve` in `~/.fvol`, so they are
+there under **Previous** next time.
 
 ## Tools
 
-`get_image_info`, `run_pstree`, `run_pslist`, `run_psscan`, `run_netscan`, `run_malfind`, `run_cmdline`, `run_dlllist`, `run_handles`, `run_filescan`, `run_memmap`, `run_custom_plugin` (any plugin, any args), `list_available_plugins`, `list_memory_dumps`.
+`open_web_ui`, `close_web_ui`, `get_image_info`, `run_pstree`, `run_pslist`, `run_psscan`, `run_netscan`, `run_malfind`, `run_cmdline`, `run_dlllist`, `run_handles`, `run_filescan`, `run_memmap`, `run_custom_plugin` (any plugin, any args), `list_available_plugins`, `list_memory_dumps`.
 
 Resources: `fvol://plugins`, `fvol://help/{plugin}`.
 
